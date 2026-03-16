@@ -1,0 +1,11 @@
+# 日语学习推送系统依赖
+
+# HTTP 请求库
+requests>=2.31.0
+
+# Python 标准库（无需安装）
+# - json
+# - logging
+# - pathlib
+# - datetime
+# - sys

@@ -1,0 +1,121 @@
+name: 日语学习每日推送
+
+on:
+  # 定时执行（UTC 时间，北京时间 +8 小时）
+  # 默认: 每天 UTC 0:00（北京时间 8:00）
+  schedule:
+    - cron: '0 0 * * *'
+
+  # 允许手动触发
+  workflow_dispatch:
+
+  # 也支持推送时触发（可选，用于测试）
+  # push:
+  #   branches: [ main ]
+
+jobs:
+  daily-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          # 持久化 current_day.txt
+          persist-credentials: false
+
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 配置文件设置
+        env:
+          LLM_API_BASE: ${{ secrets.LLM_API_BASE }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        run: |
+          # 从环境变量创建配置文件
+          cat > config.py << 'EOF'
+          # 自动生成的配置文件
+          import os
+
+          LLM_API_BASE = os.getenv("LLM_API_BASE", "https://api.openai.com/v1")
+          LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+          LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+          FEISHU_WEBHOOK_URL = os.getenv("FEISHU_WEBHOOK_URL", "")
+
+          SYSTEM_PROMPT = """你是一位专业的日语老师，擅长用二次元文化（动漫、游戏、轻小说）和日本旅行实用场景来讲解日语。
+
+          你的任务是根据给定的词汇和语法点，编写一篇生动有趣的日语学习内容。
+
+          【内容要求】
+          1. **风格设定**：
+             - 结合二次元文化（如动漫梗、游戏术语、轻小说场景）
+             - 或结合日本旅行实用场景（购物、点餐、问路、追星等）
+             - 使用轻松活泼的语言，避免教科书式的枯燥讲解
+
+          2. **内容结构**（必须包含以下部分）：
+             ## 📅 第 {day} 天：{grammar}
+
+             ### 🎯 今日词汇
+             - 逐个讲解词汇，每个词汇配：
+               - 假名读音
+               - 中文意思
+               - 二次元/旅行场景例句（带日语原文+中文翻译）
+
+             ### 📝 语法详解
+             - 语法点说明
+             - 常用句型
+             - 动漫/旅行场景中的实际应用例句（至少2个）
+
+             ### 🎮 实战演练
+             - 出2-3道小题，结合二次元/旅行场景
+             - 提供答案和解析
+
+             ### 💡 今日知识点
+             - 一个有趣的文化小知识或学习技巧
+
+          3. **注意事项**：
+             - 所有例句必须有趣、实用，避免"这是铅笔"这类无聊句子
+             - 适当使用颜文字和表情符号，增加趣味性
+             - 例句难度要适中，符合当前学习阶段
+
+          现在请根据以下内容生成学习资料：
+          - 课程：{lesson}
+          - 词汇：{words}
+          - 语法：{grammar}
+          """
+          EOF
+
+      - name: 执行推送脚本
+        env:
+          LLM_API_BASE: ${{ secrets.LLM_API_BASE }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        run: |
+          python daily_push.py
+
+      - name: 提交状态更新
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add current_day.txt
+          git diff --staged --quiet || git commit -m "chore: 更新学习天数 [skip ci]"
+          git push
+
+      - name: 上传日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_number }}
+          path: daily_push.log
+          retention-days: 30
