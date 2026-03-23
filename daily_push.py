@@ -49,6 +49,7 @@ class JapaneseDailyPush:
         self.syllabus_file = self.base_dir / "syllabus.json"
         self.state_file = self.base_dir / "current_day.txt"
         self.config_file = self.base_dir / "config.py"
+        self.kana_file = self.base_dir / "kana_data.json"
 
         # 加载配置
         self._load_config()
@@ -56,6 +57,7 @@ class JapaneseDailyPush:
         # 状态管理
         self.current_day = self._load_current_day()
         self.syllabus = self._load_syllabus()
+        self.kana_data = self._load_kana_data()
 
     def _load_config(self) -> None:
         """加载配置文件"""
@@ -145,6 +147,23 @@ class JapaneseDailyPush:
             logger.error(f"✗ 加载课程大纲失败: {e}")
             raise
 
+    def _load_kana_data(self) -> List[Dict]:
+        """加载五十音数据
+
+        Returns:
+            五十音列表
+        """
+        try:
+            with open(self.kana_file, 'r', encoding='utf-8') as f:
+                kana_data = json.load(f)
+
+            logger.info(f"✓ 加载五十音数据: 共 {len(kana_data)} 个")
+            return kana_data
+        except Exception as e:
+            logger.error(f"✗ 加载五十音数据失败: {e}")
+            # 如果加载失败，返回空列表
+            return []
+
     def get_day_content(self, day: int) -> Optional[Dict]:
         """获取指定天的学习内容
 
@@ -164,6 +183,28 @@ class JapaneseDailyPush:
             logger.warning(f"第 {day} 天超出课程范围")
             return None
 
+    def get_kana_of_day(self, day: int) -> Optional[Dict]:
+        """获取指定天的五十音复习内容
+
+        Args:
+            day: 学习天数
+
+        Returns:
+            当天的五十音数据，如果超出范围返回 None
+        """
+        if not self.kana_data:
+            return None
+
+        # kana_data 是 1-indexed（day 字段从 1 开始）
+        for kana in self.kana_data:
+            if kana['day'] == day:
+                logger.info(f"✓ 五十音复习: {kana['hiragana']} ({kana['romaji']})")
+                return kana
+
+        # 如果没有匹配的 day，使用循环取模
+        index = (day - 1) % len(self.kana_data)
+        return self.kana_data[index]
+
     def generate_content(self, day_content: Dict) -> str:
         """调用 LLM API 生成教学内容
 
@@ -174,13 +215,20 @@ class JapaneseDailyPush:
             生成的 Markdown 格式教学内容
         """
         try:
+            # 获取当天的五十音复习内容
+            kana_data = self.get_kana_of_day(day_content['day'])
+            kana_str = ""
+            if kana_data:
+                kana_str = f"{kana_data['hiragana']} / {kana_data['katakana']} ({kana_data['romaji']}) - {kana_data['type']}"
+
             # 构建提示词
             words_str = "、".join(day_content['words'])
             prompt = self.system_prompt_template.format(
                 day=day_content['day'],
                 lesson=day_content['lesson'],
                 words=words_str,
-                grammar=day_content['grammar']
+                grammar=day_content['grammar'],
+                kana=kana_str
             )
 
             logger.info("正在调用 LLM API 生成内容...")
