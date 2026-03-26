@@ -141,7 +141,7 @@ jobs:
             echo "✅ 检测到 current_day.txt 变化，准备提交..."
             git commit -m "chore: 更新学习天数 [skip ci]"
             echo "🚀 正在推送到远程仓库..."
-            git push https://${{ secrets.PAT_TOKEN }}@github.com/Siesta2025/Japanese-Daily.git
+            git push https://${{ secrets.PAT_TOKEN }}@github.com/Hide140502/Japanese-Daily.git
             echo "✅ 状态更新已提交到远程仓库"
           fi
 
